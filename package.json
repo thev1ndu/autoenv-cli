@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "publish": "pnpm build && pnpm publish --access public --no-git-checks",
+    "publish": "pnpm build && pnpm publish --access=public --no-git-checks",
     "bump:patch": "pnpm version patch",
     "bump:minor": "pnpm version minor",
     "bump:major": "pnpm version major",
