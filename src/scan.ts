@@ -3,12 +3,16 @@ import path from "node:path";
 
 export type ScanOptions = {
   rootDir: string;
-  includeLowercase?: boolean; // default false (enterprise-safe)
+  includeLowercase?: boolean; // default false
+  maxContextPerKey?: number; // default 2
 };
+
+export type KeyContext = { file: string; line: number; snippet: string };
 
 export type ScanResult = {
   keys: Set<string>;
   filesScanned: number;
+  contexts: Record<string, KeyContext[]>;
 };
 
 const IGNORE_DIRS = new Set([
@@ -23,22 +27,18 @@ const IGNORE_DIRS = new Set([
   ".cache",
 ]);
 
-/**
- * Default env key style:
- *   DB_URL, REDIS_URL, NEXT_PUBLIC_API_URL, SENTRY_DSN, AWS_REGION
- *
- * You can enable lowercase keys via CLI flag if your project uses them.
- */
+// Enterprise-safe default: UPPERCASE env keys only
 const ENV_KEY_RE_STRICT = /^[A-Z][A-Z0-9_]*$/;
 const ENV_KEY_RE_LOOSE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function scanProjectForEnvKeys(opts: ScanOptions): ScanResult {
   const root = opts.rootDir;
+  const maxCtx = opts.maxContextPerKey ?? 2;
+
   const keyOk = (k: string) =>
     (opts.includeLowercase ? ENV_KEY_RE_LOOSE : ENV_KEY_RE_STRICT).test(k);
 
-  // Keep it lightweight: scan common source/config formats (NOT markdown).
-  // We do NOT parse KEY= lines from these; only structured env patterns.
+  // Scan common source/config formats (avoid HTML/MD noise)
   const exts = new Set([
     ".ts",
     ".tsx",
@@ -53,10 +53,22 @@ export function scanProjectForEnvKeys(opts: ScanOptions): ScanResult {
   ]);
 
   const keys = new Set<string>();
+  const contexts: Record<string, KeyContext[]> = {};
   let filesScanned = 0;
 
   walk(root);
-  return { keys, filesScanned };
+
+  return { keys, filesScanned, contexts };
+
+  function addCtx(key: string, file: string, line: number, snippet: string) {
+    if (!contexts[key]) contexts[key] = [];
+    if (contexts[key].length >= maxCtx) return;
+    contexts[key].push({
+      file,
+      line,
+      snippet: snippet.trim().slice(0, 220),
+    });
+  }
 
   function walk(dir: string) {
     let entries: fs.Dirent[];
@@ -85,86 +97,65 @@ export function scanProjectForEnvKeys(opts: ScanOptions): ScanResult {
       filesScanned++;
 
       if (isEnvFile) {
-        extractFromEnvFile(content, keys, keyOk);
+        extractFromEnvFile(content, entry.name, keys, addCtx, keyOk);
       } else {
-        extractFromCodeAndConfigs(content, keys, keyOk);
+        extractFromCodeAndConfigs(content, entry.name, keys, addCtx, keyOk);
       }
     }
   }
 }
 
-/**
- * Extract from .env / .env.* files ONLY:
- * Accept lines like:
- *   KEY=value
- *   export KEY=value
- * Ignore:
- *   comments, blank lines
- */
 function extractFromEnvFile(
   text: string,
+  fileName: string,
   keys: Set<string>,
+  addCtx: (key: string, file: string, line: number, snippet: string) => void,
   keyOk: (k: string) => boolean
 ) {
-  for (const m of text.matchAll(
-    /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm
-  )) {
+  // KEY=... or export KEY=...
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const m = ln.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (!m) continue;
     const k = m[1];
-    if (keyOk(k)) keys.add(k);
+    if (!keyOk(k)) continue;
+    keys.add(k);
+    addCtx(k, fileName, i + 1, ln);
   }
 }
 
-/**
- * Extract env keys from code/config formats:
- * - process.env.KEY
- * - process.env["KEY"]
- * - import.meta.env.KEY
- * - Deno.env.get("KEY")
- * - ${KEY}
- *
- * NOTE: We do NOT extract generic KEY= patterns here (avoids JSX/HTML noise).
- */
 function extractFromCodeAndConfigs(
   text: string,
+  fileName: string,
   keys: Set<string>,
+  addCtx: (key: string, file: string, line: number, snippet: string) => void,
   keyOk: (k: string) => boolean
 ) {
-  // process.env.KEY / process.env?.KEY
-  for (const m of text.matchAll(
-    /\bprocess(?:\?\.)?\.env(?:\?\.)?\.([A-Za-z_][A-Za-z0-9_]*)\b/g
-  )) {
-    const k = m[1];
-    if (keyOk(k)) keys.add(k);
-  }
+  const lines = text.split(/\r?\n/);
 
-  // process.env["KEY"] / ['KEY']
-  for (const m of text.matchAll(
-    /\bprocess(?:\?\.)?\.env\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\]/g
-  )) {
-    const k = m[1];
-    if (keyOk(k)) keys.add(k);
-  }
+  // Only structured env patterns here (NO generic KEY= parsing)
+  const patterns: RegExp[] = [
+    /\bprocess(?:\?\.)?\.env(?:\?\.)?\.([A-Za-z_][A-Za-z0-9_]*)\b/g,
+    /\bprocess(?:\?\.)?\.env\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\]/g,
+    /\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g,
+    /\bDeno\.env\.get\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\)/g,
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
+  ];
 
-  // import.meta.env.KEY
-  for (const m of text.matchAll(
-    /\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g
-  )) {
-    const k = m[1];
-    if (keyOk(k)) keys.add(k);
-  }
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
 
-  // Deno.env.get("KEY")
-  for (const m of text.matchAll(
-    /\bDeno\.env\.get\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\)/g
-  )) {
-    const k = m[1];
-    if (keyOk(k)) keys.add(k);
-  }
-
-  // ${KEY} (docker-compose, yaml, CI)
-  for (const m of text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
-    const k = m[1];
-    if (keyOk(k)) keys.add(k);
+    for (const re of patterns) {
+      re.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(ln))) {
+        const k = match[1];
+        if (!keyOk(k)) continue;
+        keys.add(k);
+        addCtx(k, fileName, i + 1, ln);
+      }
+    }
   }
 }
 
