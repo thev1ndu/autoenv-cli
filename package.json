@@ -1,0 +1,23 @@
+{
+  "name": "@itsthw/autoenv",
+  "version": "2.2.4",
+  "type": "module",
+  "bin": {
+    "envguard": "dist/envguard.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.0"
+  }
+}
