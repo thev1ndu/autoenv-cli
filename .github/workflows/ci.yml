@@ -1,4 +1,4 @@
-name: autoEnv Publisher
+name: autoEnv Publisher CI
 
 on:
   release:
