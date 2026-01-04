@@ -28,6 +28,7 @@ var IGNORE_DIRS = /* @__PURE__ */ new Set([
 ]);
 var ENV_KEY_RE_STRICT = /^[A-Z][A-Z0-9_]*$/;
 var ENV_KEY_RE_LOOSE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+var DECLARATION_RE = /^\s*(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
 function scanProjectForEnvKeys(opts) {
   const root = opts.rootDir;
   const maxCtx = opts.maxContextPerKey ?? 2;
@@ -112,6 +113,8 @@ function extractFromCodeAndConfigs(text, relFile, keys, addCtx, keyOk) {
   const patterns = [...strictPatterns, ...interpolationPatterns];
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
+    const decl = ln.match(DECLARATION_RE);
+    if (decl && keyOk(decl[1])) continue;
     for (const re of patterns) {
       re.lastIndex = 0;
       let match;

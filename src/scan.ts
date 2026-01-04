@@ -27,12 +27,9 @@ const IGNORE_DIRS = new Set([
   ".cache",
 ]);
 
-// Enterprise-safe default: ENV VARS ARE UPPERCASE
+// ENV VARS MUST BE EXPLICIT + UPPERCASE
 const ENV_KEY_RE_STRICT = /^[A-Z][A-Z0-9_]*$/;
 const ENV_KEY_RE_LOOSE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-// Ignore local variable declarations entirely
-const DECLARATION_RE = /^\s*(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
 
 export function scanProjectForEnvKeys(opts: ScanOptions): ScanResult {
   const root = opts.rootDir;
@@ -101,7 +98,7 @@ export function scanProjectForEnvKeys(opts: ScanOptions): ScanResult {
       if (isEnvFile) {
         extractFromEnvFile(content, rel, keys, addCtx, keyOk);
       } else {
-        extractFromCodeAndConfigs(content, rel, keys, addCtx, keyOk);
+        extractFromCode(content, rel, keys, addCtx, keyOk);
       }
     }
   }
@@ -126,7 +123,7 @@ function extractFromEnvFile(
   }
 }
 
-function extractFromCodeAndConfigs(
+function extractFromCode(
   text: string,
   relFile: string,
   keys: Set<string>,
@@ -135,29 +132,16 @@ function extractFromCodeAndConfigs(
 ) {
   const lines = text.split(/\r?\n/);
 
-  const ext = path.extname(relFile).toLowerCase();
-  const allowInterpolation =
-    ext === ".yml" || ext === ".yaml" || ext === ".toml" || ext === ".json";
-
-  const strictPatterns: RegExp[] = [
+  // ONLY explicit env APIs — nothing else
+  const patterns: RegExp[] = [
     /\bprocess(?:\?\.)?\.env(?:\?\.)?\.([A-Za-z_][A-Za-z0-9_]*)\b/g,
     /\bprocess(?:\?\.)?\.env\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\]/g,
     /\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g,
     /\bDeno\.env\.get\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\)/g,
   ];
 
-  const interpolationPatterns: RegExp[] = allowInterpolation
-    ? [/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g]
-    : [];
-
-  const patterns = [...strictPatterns, ...interpolationPatterns];
-
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
-
-    // 🚫 Ignore local variable declarations completely
-    const decl = ln.match(DECLARATION_RE);
-    if (decl && keyOk(decl[1])) continue;
 
     for (const re of patterns) {
       re.lastIndex = 0;
