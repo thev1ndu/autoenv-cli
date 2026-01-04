@@ -2,6 +2,28 @@
   "name": "@itsthw/autoenv",
   "version": "7.3.1",
   "type": "module",
+  "keywords": [
+    "env",
+    "environment",
+    "dotenv",
+    "env-example",
+    "environment-variables",
+    "env-validator",
+    "config",
+    "configuration",
+    "cli",
+    "developer-tools",
+    "node",
+    "nodejs",
+    "pnpm",
+    "monorepo",
+    "workspace",
+    "openai",
+    "ai",
+    "automation",
+    "devtools"
+  ],
+  "description": "Generate .env.example from your project's env usage",
   "bin": {
     "autoenv": "dist/autoenv.js"
   },
