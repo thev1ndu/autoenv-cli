@@ -1,4 +1,4 @@
-name: autoEnv Publisher CI
+name: autoEnv-Publisher CI
 
 on:
   push:
