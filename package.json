@@ -1,6 +1,6 @@
 {
   "name": "@itsthw/autoenv",
-  "version": "7.1.9",
+  "version": "7.1.10",
   "type": "module",
   "bin": {
     "autoenv": "dist/autoenv.js"
