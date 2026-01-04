@@ -15,13 +15,14 @@
     "release:minor": "pnpm version minor && pnpm publish:public",
     "release:major": "pnpm version major && pnpm publish:public",
     "git:push": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; git add .; git commit -m \"$MSG\"'",
+    "git:push-remote": "sh -lc 'set -euo pipefail; b=\"${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}\"; git push origin \"$b\"'",
+    "push-tags": "git push --follow-tags",
     "push:patch": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm git:push && pnpm version patch'",
     "push:minor": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm git:push && pnpm version minor'",
     "push:major": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm git:push && pnpm version major'",
-    "push-tags": "git push --follow-tags",
-    "push:patch:publish": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm push:patch && pnpm publish:public && pnpm push-tags'",
-    "push:minor:publish": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm push:minor && pnpm publish:public && pnpm push-tags'",
-    "push:major:publish": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm push:major && pnpm publish:public && pnpm push-tags'"
+    "push:patch:publish": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm push:patch && pnpm publish:public && pnpm push-tags && pnpm git:push-remote'",
+    "push:minor:publish": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm push:minor && pnpm publish:public && pnpm push-tags && pnpm git:push-remote'",
+    "push:major:publish": "sh -lc 'set -euo pipefail; : \"${MSG:?MSG is required}\"; pnpm push:major && pnpm publish:public && pnpm push-tags && pnpm git:push-remote'"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.1.0",
