@@ -1,4 +1,4 @@
-# autoEnv
+# autoEnv v
 
 Generate a `.env.example` file by scanning your project for real environment variable usage.
 
