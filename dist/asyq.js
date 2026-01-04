@@ -100,13 +100,16 @@ function extractFromEnvFile(text, relFile, keys, addCtx, keyOk) {
 }
 function extractFromCodeAndConfigs(text, relFile, keys, addCtx, keyOk) {
   const lines = text.split(/\r?\n/);
-  const patterns = [
+  const ext = path.extname(relFile).toLowerCase();
+  const allowInterpolation = ext === ".yml" || ext === ".yaml" || ext === ".toml" || ext === ".json";
+  const strictPatterns = [
     /\bprocess(?:\?\.)?\.env(?:\?\.)?\.([A-Za-z_][A-Za-z0-9_]*)\b/g,
     /\bprocess(?:\?\.)?\.env\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\]/g,
     /\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g,
-    /\bDeno\.env\.get\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\)/g,
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g
+    /\bDeno\.env\.get\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\)/g
   ];
+  const interpolationPatterns = allowInterpolation ? [/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g] : [];
+  const patterns = [...strictPatterns, ...interpolationPatterns];
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
     for (const re of patterns) {
@@ -441,7 +444,7 @@ program.command("init").description("Scan project and generate .env.example").op
       status: "running",
       detail: `targets: ${targets.length}`
     },
-    { title: "Scanning & writing", status: "pending" }
+    { title: "Scanning & Writing", status: "pending" }
   ];
   renderSteps(steps);
   steps[0].status = "done";
@@ -550,7 +553,7 @@ ${t.label} diagnostics`));
     ]);
   }
   console.log("");
-  console.log(pc.bold("Complete"));
+  console.log(pc.bold("Completed"));
   console.log(table.toString());
   console.log("");
 });
