@@ -42,5 +42,3 @@ If you choose **AI Mode**, an OpenAI API key is required.
 | -------------------------- | --------------------------------- |
 | `npx autoenv init`         | Standard interactive setup.       |
 | `npx autoenv init --force` | Overwrites existing output files. |
-
-**License:** MIT | **Author:** @thev1ndu
