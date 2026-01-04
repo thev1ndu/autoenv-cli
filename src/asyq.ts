@@ -121,6 +121,95 @@ async function getApiKey(): Promise<string> {
   return key.trim();
 }
 
+/* ----------------------------- Monorepo support ---------------------------- */
+
+function readWorkspaceGlobs(rootAbs: string): string[] {
+  const globs: string[] = [];
+
+  // pnpm-workspace.yaml
+  const pnpmWs = path.join(rootAbs, "pnpm-workspace.yaml");
+  if (fs.existsSync(pnpmWs)) {
+    const txt = fs.readFileSync(pnpmWs, "utf8");
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/^\s*-\s*["']?([^"']+)["']?\s*$/);
+      if (m) globs.push(m[1].trim());
+    }
+  }
+
+  // package.json workspaces
+  const pkgPath = path.join(rootAbs, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      const ws = pkg?.workspaces;
+      if (Array.isArray(ws)) globs.push(...ws);
+      if (ws && Array.isArray(ws.packages)) globs.push(...ws.packages);
+    } catch {
+      // ignore
+    }
+  }
+
+  return [...new Set(globs)].filter(Boolean);
+}
+
+function expandSimpleGlob(rootAbs: string, pattern: string): string[] {
+  // Supports:
+  // - apps/*
+  // - packages/*
+  // - apps/web
+  // Ignores advanced globs like **, {}, []
+  const norm = pattern.replace(/\\/g, "/").replace(/\/+$/, "");
+
+  if (!norm.includes("*")) {
+    const abs = path.join(rootAbs, norm);
+    return fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? [norm] : [];
+  }
+
+  const m = norm.match(/^([^*]+)\/\*$/);
+  if (!m) return [];
+
+  const baseRel = m[1].replace(/\/+$/, "");
+  const baseAbs = path.join(rootAbs, baseRel);
+  if (!fs.existsSync(baseAbs) || !fs.statSync(baseAbs).isDirectory()) return [];
+
+  const out: string[] = [];
+  for (const name of fs.readdirSync(baseAbs)) {
+    const rel = `${baseRel}/${name}`;
+    const abs = path.join(rootAbs, rel);
+    if (!fs.statSync(abs).isDirectory()) continue;
+    if (fs.existsSync(path.join(abs, "package.json"))) out.push(rel);
+  }
+  return out;
+}
+
+function detectWorkspaces(rootAbs: string): string[] {
+  const globs = readWorkspaceGlobs(rootAbs);
+  const found = new Set<string>();
+
+  for (const g of globs) {
+    for (const rel of expandSimpleGlob(rootAbs, g)) found.add(rel);
+  }
+
+  // Turbo-style fallback if no globs detected
+  if (found.size === 0) {
+    for (const base of ["apps", "packages"]) {
+      const baseAbs = path.join(rootAbs, base);
+      if (!fs.existsSync(baseAbs) || !fs.statSync(baseAbs).isDirectory())
+        continue;
+      for (const name of fs.readdirSync(baseAbs)) {
+        const rel = `${base}/${name}`;
+        const abs = path.join(rootAbs, rel);
+        if (!fs.statSync(abs).isDirectory()) continue;
+        if (fs.existsSync(path.join(abs, "package.json"))) found.add(rel);
+      }
+    }
+  }
+
+  return [...found].sort((a, b) => a.localeCompare(b));
+}
+
+/* -------------------------------------------------------------------------- */
+
 const program = new Command();
 
 program
@@ -132,34 +221,53 @@ program
   .command("init")
   .description("Scan project and generate .env.example")
   .option("--root <dir>", "Project root to scan", ".")
-  .option("--out <file>", "Output file", ".env.example")
+  .option("--out <file>", "Output file name", ".env.example")
   .option("--force", "Overwrite output if it exists")
   .option(
     "--include-lowercase",
     "Include lowercase/mixed-case keys (not recommended)"
   )
   .option("--debug", "Print scan diagnostics")
+  .option("--monorepo", "Generate .env.example for root + each workspace")
   .action(async (opts) => {
     renderHeader();
 
-    const root = path.resolve(process.cwd(), opts.root);
-    const outFile = path.resolve(process.cwd(), opts.out);
-
-    if (fs.existsSync(outFile) && !opts.force) {
-      fail(`Output already exists: ${opts.out}`, "Use --force to overwrite.");
-    }
+    const rootAbs = path.resolve(process.cwd(), opts.root);
+    const outName = String(opts.out || ".env.example");
 
     const mode = await pickMode();
     const model: ModelName | null = mode === "ai" ? await pickModel() : null;
 
+    const targets: { label: string; dirAbs: string }[] = [
+      { label: "root", dirAbs: rootAbs },
+    ];
+
+    if (opts.monorepo) {
+      const workspaces = detectWorkspaces(rootAbs);
+      for (const rel of workspaces) {
+        targets.push({ label: rel, dirAbs: path.join(rootAbs, rel) });
+      }
+    }
+
+    // API key once for all targets (AI mode)
+    let apiKey = "";
+    if (mode === "ai" && model) {
+      apiKey = await getApiKey();
+      if (!apiKey) {
+        fail(
+          "OpenAI API key is required for AI-assisted mode.",
+          "Set OPENAI_API_KEY or enter it when prompted."
+        );
+      }
+    }
+
     const steps: Step[] = [
-      { title: "Preparing", status: "running", detail: `root: ${opts.root}` },
-      { title: "Scanning project files", status: "pending" },
       {
-        title: "Writing .env.example",
-        status: "pending",
-        detail: mode === "ai" ? `AI (${model})` : "Default",
+        title: "Preparing",
+        status: "running",
+        detail: `targets: ${targets.length}`,
       },
+      { title: "Scanning & writing", status: "pending" },
     ];
 
     renderSteps(steps);
@@ -168,123 +276,144 @@ program
     steps[1].status = "running";
     renderSteps(steps);
 
-    const scanSpinner = ora({
-      text: "Scanning for env keys",
-      spinner: "dots",
-    }).start();
+    const results: Array<{
+      target: string;
+      outRel: string;
+      keys: number;
+      files: number;
+    }> = [];
 
-    const res = scanProjectForEnvKeys({
-      rootDir: root,
-      includeLowercase: !!opts.includeLowercase,
-    });
+    for (const t of targets) {
+      const outFileAbs = path.join(t.dirAbs, outName);
+      const outRelFromRoot =
+        path.relative(rootAbs, outFileAbs).replace(/\\/g, "/") || outName;
 
-    scanSpinner.stop();
+      if (fs.existsSync(outFileAbs) && !opts.force) {
+        steps[1].status = "fail";
+        renderSteps(steps);
+        finishSteps();
+        fail(
+          `Output already exists: ${outRelFromRoot}`,
+          "Use --force to overwrite."
+        );
+      }
 
-    steps[1].status = "done";
-    steps[1].detail = `${res.filesScanned} files scanned`;
-    steps[2].status = "running";
-    renderSteps(steps);
-
-    if (opts.debug) {
-      console.log(pc.dim(""));
-      console.log(pc.dim("Diagnostics"));
-      console.log(pc.dim(`  root: ${opts.root}`));
-      console.log(pc.dim(`  files scanned: ${res.filesScanned}`));
-      console.log(pc.dim(`  keys found: ${res.keys.size}`));
-      console.log(pc.dim(""));
-    }
-
-    if (res.keys.size === 0) {
-      steps[2].status = "fail";
-      renderSteps(steps);
-      finishSteps();
-      fail(
-        "No environment variables found.",
-        "Ensure your code uses process.env.KEY or ${KEY}."
-      );
-    }
-
-    const keys = [...res.keys].sort((a, b) => a.localeCompare(b));
-
-    // Default content
-    let content = keys.map((k) => `${k}=`).join("\n") + "\n";
-
-    if (mode === "ai" && model) {
-      const apiKey = await getApiKey();
-
-      const aiSpinner = ora({
-        text: "Generating AI guidance",
+      const scanSpinner = ora({
+        text: `Scanning ${t.label}`,
         spinner: "dots",
       }).start();
 
-      try {
-        const docs = await generateEnvDocsWithOpenAI({
-          apiKey,
-          model,
-          projectHint:
-            "Write practical guidance for developers setting env vars.",
-          contexts: res.contexts,
-          keys,
-        });
+      const res = scanProjectForEnvKeys({
+        rootDir: t.dirAbs,
+        includeLowercase: !!opts.includeLowercase,
+      });
 
-        aiSpinner.stop();
+      scanSpinner.stop();
 
-        const byKey = new Map(docs.map((d) => [d.key, d]));
-
-        content =
-          keys
-            .map((k) => {
-              const d = byKey.get(k);
-              if (!d) return `${k}=\n`;
-
-              const secretNote = d.is_secret
-                ? "Secret value. Do not commit."
-                : "Non-secret value (verify before committing).";
-
-              return [
-                `# ${d.key}`,
-                `# ${d.description}`,
-                `# Where to get it: ${d.where_to_get}`,
-                `# ${secretNote}`,
-                `${d.key}=${d.example_value || ""}`,
-                "",
-              ].join("\n");
-            })
-            .join("\n")
-            .trimEnd() + "\n";
-      } catch (e: any) {
-        aiSpinner.stop();
-        steps[2].status = "fail";
-        renderSteps(steps);
-        finishSteps();
-        fail("AI generation failed.", e?.message ?? String(e));
+      if (opts.debug) {
+        console.log(pc.dim(`\n${t.label} diagnostics`));
+        console.log(pc.dim(`  dir: ${t.dirAbs}`));
+        console.log(pc.dim(`  files scanned: ${res.filesScanned}`));
+        console.log(pc.dim(`  keys found: ${res.keys.size}\n`));
       }
+
+      if (res.keys.size === 0) {
+        // In monorepo mode, don't fail the whole run for empty workspaces.
+        results.push({
+          target: t.label,
+          outRel: outRelFromRoot,
+          keys: 0,
+          files: res.filesScanned,
+        });
+        continue;
+      }
+
+      const keys = [...res.keys].sort((a, b) => a.localeCompare(b));
+
+      let content = keys.map((k) => `${k}=`).join("\n") + "\n";
+
+      if (mode === "ai" && model) {
+        const aiSpinner = ora({
+          text: `AI docs ${t.label}`,
+          spinner: "dots",
+        }).start();
+
+        try {
+          const docs = await generateEnvDocsWithOpenAI({
+            apiKey,
+            model,
+            projectHint:
+              "Write practical guidance for developers setting env vars.",
+            contexts: res.contexts,
+            keys,
+          });
+
+          aiSpinner.stop();
+
+          const byKey = new Map(docs.map((d) => [d.key, d]));
+
+          content =
+            keys
+              .map((k) => {
+                const d = byKey.get(k);
+                if (!d) return `${k}=\n`;
+
+                const secretNote = d.is_secret
+                  ? "Secret value. Do not commit."
+                  : "Non-secret value (verify before committing).";
+
+                return [
+                  `# ${d.key}`,
+                  `# ${d.description}`,
+                  `# Where to get it: ${d.where_to_get}`,
+                  `# ${secretNote}`,
+                  `${d.key}=${d.example_value || ""}`,
+                  "",
+                ].join("\n");
+              })
+              .join("\n")
+              .trimEnd() + "\n";
+        } catch (e: any) {
+          aiSpinner.stop();
+          steps[1].status = "fail";
+          renderSteps(steps);
+          finishSteps();
+          fail(`AI generation failed for ${t.label}.`, e?.message ?? String(e));
+        }
+      }
+
+      fs.writeFileSync(outFileAbs, content, "utf8");
+
+      results.push({
+        target: t.label,
+        outRel: outRelFromRoot,
+        keys: keys.length,
+        files: res.filesScanned,
+      });
     }
 
-    fs.writeFileSync(outFile, content, "utf8");
-
-    steps[2].status = "done";
+    steps[1].status = "done";
     renderSteps(steps);
     finishSteps();
 
     const table = new Table({
       style: { head: [], border: [] },
-      colWidths: [18, 60],
+      colWidths: [28, 10, 60],
       wordWrap: true,
     });
 
-    table.push(
-      [pc.dim("Output"), pc.cyan(opts.out)],
-      [pc.dim("Keys"), pc.cyan(String(keys.length))],
-      [pc.dim("Mode"), pc.cyan(mode === "ai" ? `AI (${model})` : "Default")]
-    );
+    table.push([pc.dim("Target"), pc.dim("Keys"), pc.dim("Output")]);
+    for (const r of results) {
+      table.push([
+        pc.cyan(r.target),
+        pc.cyan(String(r.keys)),
+        pc.cyan(r.outRel),
+      ]);
+    }
 
     console.log("");
     console.log(pc.bold("Complete"));
     console.log(table.toString());
-    console.log(pc.dim("Next steps"));
-    console.log(pc.dim(`  1) Fill values in ${opts.out}`));
-    console.log(pc.dim("  2) Copy to .env (do not commit secrets)"));
     console.log("");
   });
 
