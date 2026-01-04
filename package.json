@@ -13,7 +13,10 @@
     "publish:public": "pnpm build && pnpm publish --access public --no-git-checks",
     "release:patch": "pnpm version patch && pnpm publish:public",
     "release:minor": "pnpm version minor && pnpm publish:public",
-    "release:major": "pnpm version major && pnpm publish:public"
+    "release:major": "pnpm version major && pnpm publish:public",
+    "push:patch": "test -n \"$msg\" || (echo \"Error: MSG is required\" && exit 1); git add . && git commit -m \"$msg\" && pnpm release:patch",
+    "push:minor": "test -n \"$msg\" || (echo \"Error: MSG is required\" && exit 1); git add . && git commit -m \"$msg\" && pnpm release:minor",
+    "push:major": "test -n \"$msg\" || (echo \"Error: MSG is required\" && exit 1); git add . && git commit -m \"$msg\" && pnpm release:major"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.1.0",

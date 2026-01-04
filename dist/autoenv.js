@@ -245,6 +245,18 @@ async function generateEnvDocsWithOpenAI(opts) {
 }
 
 // src/autoenv.ts
+import { fileURLToPath } from "url";
+function getPackageVersion() {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path2.dirname(__filename);
+    const pkgPath = path2.resolve(__dirname, "../package.json");
+    const pkg = JSON.parse(fs2.readFileSync(pkgPath, "utf8"));
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 var Table = TablePkg.default ?? TablePkg;
 var MODELS = [
   "gpt-5",
@@ -256,7 +268,7 @@ var MODELS = [
 ];
 function renderHeader() {
   const body = [
-    pc.bold("autoEnv"),
+    pc.bold(`autoEnv v${getPackageVersion()}`),
     pc.dim(""),
     pc.dim("Generate .env.example from your project\u2019s env usage"),
     pc.dim("Created by @thev1ndu")
@@ -313,8 +325,8 @@ async function getApiKey() {
   const envKey = process.env.OPENAI_API_KEY?.trim();
   if (envKey) return envKey;
   const key = await password({
-    message: "Enter OpenAI API key (not saved)"
-    // mask: "*",
+    message: "Enter OpenAI API key (not saved)",
+    mask: "*"
   });
   return String(key ?? "").trim();
 }
