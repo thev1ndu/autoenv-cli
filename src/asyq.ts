@@ -215,7 +215,7 @@ program
   )
   .option("--no-root", "In monorepo mode: skip generating for repo root")
   .action(async (opts) => {
-    p.intro(pc.cyan(`\nAsyq v${getPackageVersion()} Created by @thev1ndu`));
+    p.intro(pc.cyan(`\nAsyq CLI v${getPackageVersion()} Created by @thev1ndu`));
 
     const rootAbs = path.resolve(process.cwd(), opts.root);
     const outName = String(opts.out || ".env.example");

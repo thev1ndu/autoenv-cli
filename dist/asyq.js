@@ -411,33 +411,75 @@ function detectWorkspaces(rootAbs) {
   }
   return [...found].sort((a, b) => a.localeCompare(b));
 }
+async function pickWorkspaces(workspaces) {
+  const picked = await p.multiselect({
+    message: "Select workspaces to generate .env.example for",
+    options: workspaces.map((w) => ({ label: w, value: w })),
+    required: false
+  });
+  if (p.isCancel(picked)) {
+    p.cancel("Operation cancelled");
+    process.exit(0);
+  }
+  return picked ?? [];
+}
 var program = new Command();
 program.name("asyq").description("Generate .env.example by scanning your project for env usage").version(`v${getPackageVersion()}`);
 program.command("init").description("Scan project and generate .env.example").option("--root <dir>", "Project root to scan", ".").option("--out <file>", "Output file name", ".env.example").option("--force", "Overwrite output if it exists").option(
   "--include-lowercase",
   "Include lowercase/mixed-case keys (not recommended)"
-).option("--debug", "Print scan diagnostics").option("--monorepo", "Generate .env.example for root + each workspace").action(async (opts) => {
+).option("--debug", "Print scan diagnostics").option("--monorepo", "Generate .env.example for root + each workspace").option(
+  "--select",
+  "In monorepo mode: interactively choose which workspaces to generate for"
+).option(
+  "--workspaces <list>",
+  "In monorepo mode: comma-separated workspace list to generate for"
+).option("--no-root", "In monorepo mode: skip generating for repo root").action(async (opts) => {
   p.intro(pc.cyan(`
 Asyq v${getPackageVersion()} Created by @thev1ndu`));
   const rootAbs = path2.resolve(process.cwd(), opts.root);
   const outName = String(opts.out || ".env.example");
   const mode = await pickMode();
   const model = mode === "ai" ? await pickModel() : null;
-  const targets = [
-    { label: "root", dirAbs: rootAbs }
-  ];
+  const targets = [];
+  if (opts.root !== false) {
+    targets.push({ label: "root", dirAbs: rootAbs });
+  }
   if (opts.monorepo) {
     const workspaces = detectWorkspaces(rootAbs);
-    for (const rel of workspaces) {
-      targets.push({ label: rel, dirAbs: path2.join(rootAbs, rel) });
+    if (workspaces.length === 0) {
+      p.note(
+        "No workspaces detected (pnpm-workspace.yaml / package.json workspaces / apps/* / packages/*).",
+        "Monorepo"
+      );
+    } else {
+      let selected = workspaces;
+      if (opts.workspaces) {
+        const allow = new Set(
+          String(opts.workspaces).split(",").map((s) => s.trim()).filter(Boolean)
+        );
+        selected = workspaces.filter((w) => allow.has(w));
+        const missing = [...allow].filter((x) => !workspaces.includes(x));
+        if (missing.length) {
+          p.note(missing.join("\n"), "Unknown workspaces ignored");
+        }
+      } else if (opts.select) {
+        selected = await pickWorkspaces(workspaces);
+      }
+      for (const rel of selected) {
+        targets.push({ label: rel, dirAbs: path2.join(rootAbs, rel) });
+      }
     }
+  }
+  if (targets.length === 0) {
+    fail(
+      "No targets selected. Tip: remove --no-root or select at least one workspace."
+    );
   }
   let apiKey = "";
   if (mode === "ai" && model) {
     apiKey = await getApiKey();
-    if (!apiKey) {
-      fail("OpenAI API key is required for AI-assisted mode.");
-    }
+    if (!apiKey) fail("OpenAI API key is required for AI-assisted mode.");
   }
   const results = [];
   for (const t of targets) {
@@ -468,11 +510,16 @@ Asyq v${getPackageVersion()} Created by @thev1ndu`));
       );
     }
     if (res.keys.size === 0) {
+      p.note(
+        `No env vars detected in ${t.label}. Skipping ${outRelFromRoot}`,
+        "Nothing to write"
+      );
       results.push({
         target: t.label,
         outRel: outRelFromRoot,
         keys: 0,
-        files: res.filesScanned
+        files: res.filesScanned,
+        wrote: false
       });
       continue;
     }
@@ -517,14 +564,16 @@ Asyq v${getPackageVersion()} Created by @thev1ndu`));
       target: t.label,
       outRel: outRelFromRoot,
       keys: keys.length,
-      files: res.filesScanned
+      files: res.filesScanned,
+      wrote: true
     });
   }
-  const summary = results.map(
-    (r) => `${pc.cyan(r.target.padEnd(20))} ${pc.green(
+  const summary = results.map((r) => {
+    const status = r.wrote ? pc.green("wrote") : pc.yellow("skipped");
+    return `${pc.cyan(r.target.padEnd(20))} ${pc.green(
       String(r.keys).padStart(3)
-    )} keys \u2192 ${pc.dim(r.outRel)}`
-  ).join("\n");
+    )} keys \u2192 ${pc.dim(r.outRel)} ${pc.dim(`(${status})`)}`;
+  }).join("\n");
   p.note(summary, "Generated");
   p.outro(pc.green("\u2713 All done!"));
 });

@@ -1,4 +1,4 @@
-# Asyq
+# Asyq CLI — Environment Variable Scanner & .env Generator with AI
 
 Automatically generate `.env.example` files by scanning your codebase for environment variable usage.
 
