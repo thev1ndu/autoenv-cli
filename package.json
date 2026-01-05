@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "pnpm build",
-    "pulish": "pnpm publish --access=public --no-git-checks",
+    "publish": "pnpm publish --access=public --no-git-checks",
     "bump:patch": "pnpm version patch",
     "bump:minor": "pnpm version minor",
     "bump:major": "pnpm version major",
