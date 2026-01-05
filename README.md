@@ -2,6 +2,17 @@
 
 Automatically generate `.env.example` files by scanning your codebase for environment variable usage.
 
+<div align="center">
+
+[![asyqcli.gif](https://i.postimg.cc/jqJYDbFd/asyqcli.gif)](https://postimg.cc/bd8B5KPK)
+
+</div>
+
+<p>
+  <b>Stop letting your environment templates fall out of sync.</b><br>
+  Asyq scans your source code to detect variable usage and automatically generates a complete <code>.env.example</code> file—ensuring your team never struggles with missing configuration keys again.
+</p>
+
 ## Installation
 
 ```bash

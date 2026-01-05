@@ -436,7 +436,7 @@ program.command("init").description("Scan project and generate .env.example").op
   "In monorepo mode: comma-separated workspace list to generate for"
 ).option("--no-root", "In monorepo mode: skip generating for repo root").action(async (opts) => {
   p.intro(pc.cyan(`
-Asyq v${getPackageVersion()} Created by @thev1ndu`));
+Asyq CLI v${getPackageVersion()} Created by @thev1ndu`));
   const rootAbs = path2.resolve(process.cwd(), opts.root);
   const outName = String(opts.out || ".env.example");
   const mode = await pickMode();
