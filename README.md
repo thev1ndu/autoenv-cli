@@ -1,44 +1,72 @@
-**Asyq** generates a `.env.example` file by scanning your project for real environment variable usage. It creates a single source of truth for your team without guessing secrets.
+# Asyq
 
-## Installation & Usage
+Automatically generate `.env.example` files by scanning your codebase for environment variable usage.
 
-First, install it as a development dependency:
+## Installation
 
 ```bash
-# Using npm
 npm install -D asyq
-
-# Using pnpm
+# or
 pnpm add -D asyq
-
+# or
+yarn add -D asyq
 ```
 
-then, run the initialization command:
+## Usage
 
 ```bash
 npx asyq init
-
 ```
 
-## How It Works
+Choose between two modes:
 
-1. **Scan:** Analyzes codebase for `process.env`, `import.meta.env`, and `${VAR}` usage.
-2. **Detect:** Identifies only variables that are actually used.
-3. **Generate:** Creates a clean `.env.example` file.
+- **Default** - Fast generation with variable names only
+- **AI-assisted** - Adds descriptions and example values (requires OpenAI API key)
 
-- **Default Mode:** Lists variable names only.
-- **AI Mode:** Adds descriptions and safe example values using LLMs.
+## Commands
 
-## OpenAI API Key Security
+| Command                    | Description                 |
+| -------------------------- | --------------------------- |
+| `npx asyq init`            | Interactive setup           |
+| `npx asyq init --force`    | Overwrite existing files    |
+| `npx asyq init --monorepo` | Generate for each workspace |
+| `npx asyq init --debug`    | Show scan diagnostics       |
 
-If you choose **AI Mode**, an OpenAI API key is required.
+## Options
 
-- **Input:** Reads from the `OPENAI_API_KEY` environment variable (recommended) or an interactive prompt.
-- **Safety:** The key is **never written to disk**, **never logged**, and **only used for the current run**.
+| Option                | Description                               |
+| --------------------- | ----------------------------------------- |
+| `--root <dir>`        | Project root to scan (default: `.`)       |
+| `--out <file>`        | Output filename (default: `.env.example`) |
+| `--force`             | Overwrite without confirmation            |
+| `--include-lowercase` | Include mixed-case variables              |
+| `--debug`             | Print detailed diagnostics                |
+| `--monorepo`          | Generate for root + workspaces            |
 
-## Key Options
+## Examples
 
-| Command                 | Description                       |
-| ----------------------- | --------------------------------- |
-| `npx asyq init`         | Standard interactive setup.       |
-| `npx asyq init --force` | Overwrites existing output files. |
+```bash
+# Basic usage
+npx asyq init
+
+# Force overwrite
+npx asyq init --force
+
+# Monorepo project
+npx asyq init --monorepo
+
+# Custom output
+npx asyq init --out .env.template
+
+# Scan specific directory
+npx asyq init --root ./packages/api
+```
+
+Set your OpenAI API key:
+
+```bash
+export OPENAI_API_KEY=sk-...
+npx asyq init
+```
+
+Or enter it when prompted (not saved to disk).
