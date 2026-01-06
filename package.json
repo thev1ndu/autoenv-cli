@@ -43,6 +43,14 @@
     "release:minor": "pnpm commit && pnpm bump:minor && pnpm push",
     "release:major": "pnpm commit && pnpm bump:major && pnpm push"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thev1ndu/asyq.git"
+  },
+  "homepage": "https://github.com/thev1ndu/asyq#readme",
+  "bugs": {
+    "url": "https://github.com/thev1ndu/asyq/issues"
+  },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "commander": "^12.0.0",
