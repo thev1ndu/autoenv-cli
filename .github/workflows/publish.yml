@@ -15,9 +15,13 @@ jobs:
     environment: release
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (full history for tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -25,11 +29,28 @@ jobs:
       - name: Enable Corepack (pnpm)
         run: corepack enable
 
+      - name: Show pnpm version
+        run: pnpm -v
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
-      - name: Publish (OIDC, no token)
+      - name: Show package name + version
+        run: |
+          node -p "require('./package.json').name + '@' + require('./package.json').version"
+
+      - name: Fail if version already exists on npm
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "❌ $NAME@$VER already exists on npm. Bump version and push a new tag."
+            exit 1
+          fi
+          echo "✅ $NAME@$VER not found on npm. Continuing."
+
+      - name: Publish
         run: npm publish --provenance --access public

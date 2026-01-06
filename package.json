@@ -1,6 +1,6 @@
 {
   "name": "asyq",
-  "version": "8.2.4",
+  "version": "8.2.5",
   "type": "module",
   "keywords": [
     "env",
@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "pnpm build",
-    "publish": "pnpm publish --access=public --no-git-checks",
+    "publish:local": "pnpm publish --access=public --no-git-checks",
     "bump:patch": "pnpm version patch",
     "bump:minor": "pnpm version minor",
     "bump:major": "pnpm version major",
