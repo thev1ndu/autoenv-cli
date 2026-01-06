@@ -213,7 +213,7 @@ program
     "--workspaces <list>",
     "In monorepo mode: comma-separated workspace list to generate for"
   )
-  .option("--no-root", "In monorepo mode: skip generating for repo root")
+  .option("--skip-root", "In monorepo mode: skip generating for repo root")
   .action(async (opts) => {
     p.intro(pc.cyan(`Asyq CLI v${getPackageVersion()} Created by @thev1ndu`));
 
@@ -225,8 +225,8 @@ program
 
     const targets: { label: string; dirAbs: string }[] = [];
 
-    // Root target (default on, unless --no-root)
-    if (opts.root !== false) {
+    // Root target (default on, unless --skip-root)
+    if (!opts.skipRoot) {
       targets.push({ label: "root", dirAbs: rootAbs });
     }
 
@@ -266,7 +266,7 @@ program
 
     if (targets.length === 0) {
       fail(
-        "No targets selected. Tip: remove --no-root or select at least one workspace."
+        "No targets selected. Tip: remove --skip-root or select at least one workspace."
       );
     }
 
