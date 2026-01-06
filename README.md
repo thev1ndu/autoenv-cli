@@ -1,4 +1,23 @@
-# Asyq CLI — Environment Variable Scanner & .env Generator with AI
+## Asyq CLI — Environment Variable Scanner & .env Generator with AI
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/asyq">
+    <img src="https://img.shields.io/npm/v/asyq?color=cb3837&label=npm&logo=npm" />
+  </a>
+  <a href="https://www.npmjs.com/package/asyq">
+    <img src="https://img.shields.io/npm/dm/asyq?color=blue&logo=npm" />
+  </a>
+  <a href="https://github.com/thev1ndu/asyq">
+    <img src="https://img.shields.io/github/stars/thev1ndu/asyq?style=social" />
+  </a>
+  <a href="https://github.com/thev1ndu/asyq/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/thev1ndu/asyq" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/thev1ndu/asyq/wiki/Asyq-CLI-Docs"><strong>Read the Full Documentation (Wiki)</strong></a>
+</p>
 
 Automatically generate `.env.example` files by scanning your codebase for environment variable usage.
 
