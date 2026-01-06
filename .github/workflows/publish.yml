@@ -1,4 +1,4 @@
-name: Asyq CLI - Publisher CI
+name: Asyq - Publisher CI
 
 on:
   push:
@@ -13,6 +13,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     environment: release
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,6 +22,14 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - run: npm ci
-      - run: npm test
-      - run: npm publish --provenance --access public
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish (OIDC, no token)
+        run: npm publish --provenance --access public
