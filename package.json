@@ -1,6 +1,6 @@
 {
   "name": "asyq",
-  "version": "8.3.1",
+  "version": "8.2.6",
   "type": "module",
   "keywords": [
     "env",
@@ -41,6 +41,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thev1ndu/asyq.git"
+  },
+  "homepage": "https://github.com/thev1ndu/asyq#readme",
+  "bugs": {
+    "url": "https://github.com/thev1ndu/asyq/issues"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
